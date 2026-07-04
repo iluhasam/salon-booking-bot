@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db.models import Booking
 from app.db.repository import BookingRepository
+from app.services.notify import notify_staff
 
 logger = logging.getLogger(__name__)
 router = Router(name="my_bookings")
@@ -91,11 +92,15 @@ async def on_cancel_booking(callback: CallbackQuery, session: AsyncSession, bot:
             f"Записаться снова: /start"
         )
 
-    # Уведомление администратору (не критично для клиента).
-    try:
-        await bot.send_message(
-            settings.admin_chat_id,
-            f"❌ Отмена записи #{booking.id} на {starts_local:%d.%m.%Y %H:%M}",
-        )
-    except Exception:
-        logger.exception("Failed to notify admin about cancellation %s", booking.id)
+    # Уведомление персоналу: все админы из БД + мастер записи.
+    client_label = booking.user.name or booking.user.username or str(callback.from_user.id)
+    await notify_staff(
+        bot,
+        session,
+        booking.master_id,
+        f"❌ Отмена записи #{booking.id}\n"
+        f"Клиент: {html.quote(client_label)}\n"
+        f"Услуга: {html.quote(booking.service.title)}\n"
+        f"Мастер: {html.quote(booking.master.name)}\n"
+        f"Когда: {starts_local:%d.%m.%Y %H:%M}",
+    )

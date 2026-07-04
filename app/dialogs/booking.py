@@ -12,7 +12,7 @@ import operator
 from datetime import date, datetime
 from typing import Any
 
-from aiogram import Bot, F, Router, html
+from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db.repository import BookingRepository, SlotOccupiedError
 from app.schemas.contact import ContactSchema
+from app.services.notify import booking_summary, notify_staff
 from app.tasks.notifications import schedule_reminder
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ async def services_getter(
 async def masters_getter(
     dialog_manager: DialogManager, session: AsyncSession, **_: Any
 ) -> dict[str, Any]:
-    """Список мастеров из БД."""
+    """Список активных мастеров из БД."""
     repo = BookingRepository(session)
     masters = await repo.get_masters()
     return {"masters": [(m.id, f"{m.name} ★{m.rating:.1f}") for m in masters]}
@@ -243,18 +244,18 @@ async def on_confirm(callback: CallbackQuery, _: Button, manager: DialogManager)
     except Exception:
         logger.exception("Failed to schedule reminder for booking %s", booking.id)
 
-    # Уведомление администратору (не критично для клиента).
+    # Уведомление персоналу: все админы из БД + мастер записи.
     starts_local = starts_at.astimezone(settings.tz)
-    try:
-        await bot.send_message(
-            settings.admin_chat_id,
-            f"🆕 Новая запись #{booking.id}\n"
-            f"Клиент: {html.quote(ctx['name'])} ({html.quote(ctx['phone'])})\n"
-            f"Когда: {starts_local:%d.%m.%Y %H:%M}\n"
-            f"Мест: {ctx['seats']}",
-        )
-    except Exception:
-        logger.exception("Failed to notify admin about booking %s", booking.id)
+    master = await repo.get_master(ctx["master_id"])
+    service = await repo.get_service(ctx["service_id"])
+    summary = booking_summary(
+        booking,
+        client_name=ctx["name"],
+        phone=ctx["phone"],
+        master_name=master.name if master else "—",
+        service_title=service.title if service else "—",
+    )
+    await notify_staff(bot, session, ctx["master_id"], f"🆕 Новая запись #{booking.id}\n{summary}")
 
     if callback.message is not None:
         await callback.message.answer(

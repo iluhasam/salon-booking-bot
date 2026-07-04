@@ -10,8 +10,25 @@
 - Свободные слоты считаются по рабочим часам салона с учётом длительности услуги.
 - `/my` — просмотр и отмена своих записей.
 - Напоминание клиенту за 2 часа до визита (настраивается), переживает рестарты.
-- Уведомления администратору о новых записях и отменах.
 - Валидация имени и телефона (Pydantic).
+
+### Роли (хранятся в БД, без ID в конфигах)
+
+| Роль | Возможности |
+|---|---|
+| **client** | запись, просмотр и отмена своих записей (`/start`, `/my`) |
+| **master** | `/schedule` — своё расписание; уведомления о своих записях/отменах |
+| **admin** | `/admin` — назначение ролей, блокировка мастеров, все записи; уведомления обо всём |
+
+Добавление мастера без изменения кода: мастер запускает бота → админ в
+`/admin → Пользователи` назначает ему роль «мастер» (профиль мастера
+создаётся автоматически). Мастера не удаляются, а блокируются — история
+записей сохраняется. Первый администратор назначается скриптом:
+
+```bash
+uv run python -m scripts.grant_admin <telegram_id>
+# в Docker: docker compose run --rm bot python -m scripts.grant_admin <telegram_id>
+```
 
 ## Структура проекта
 
@@ -44,10 +61,11 @@ Dockerfile, docker-compose.yml, pyproject.toml, uv.lock
 
 ```bash
 cp .env.example .env
-# заполнить BOT_TOKEN (от @BotFather), ADMIN_CHAT_ID и POSTGRES_PASSWORD
+# заполнить BOT_TOKEN (от @BotFather) и POSTGRES_PASSWORD
 
 docker compose up -d --build       # postgres, redis, миграции, бот, воркер, планировщик
 docker compose run --rm seed       # наполнить справочники услуг и мастеров (один раз)
+docker compose run --rm bot python -m scripts.grant_admin <ваш telegram_id>  # первый админ
 docker compose logs -f bot         # логи бота
 ```
 
@@ -81,7 +99,6 @@ uv run ruff format .
 | Переменная | Описание | По умолчанию |
 |---|---|---|
 | `BOT_TOKEN` | токен бота Telegram | — (обязательна) |
-| `ADMIN_CHAT_ID` | чат для уведомлений администратора | — (обязательна) |
 | `DATABASE_URL` | PostgreSQL DSN (`postgresql+asyncpg://…`) | localhost |
 | `REDIS_URL` | Redis (очередь задач + FSM-состояния) | localhost |
 | `TIMEZONE` | часовой пояс салона | `Europe/Moscow` |
