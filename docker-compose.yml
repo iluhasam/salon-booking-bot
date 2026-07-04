@@ -1,0 +1,88 @@
+x-app-env: &app-env
+  BOT_TOKEN: ${BOT_TOKEN}
+  ADMIN_CHAT_ID: ${ADMIN_CHAT_ID}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bot}:${POSTGRES_PASSWORD:-bot}@postgres:5432/${POSTGRES_DB:-booking}
+  REDIS_URL: redis://redis:6379/0
+  TIMEZONE: ${TIMEZONE:-Europe/Moscow}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bot}
+      POSTGRES_DB: ${POSTGRES_DB:-booking}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bot} -d ${POSTGRES_DB:-booking}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    image: salon-booking-bot
+    command: alembic upgrade head
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  seed:
+    image: salon-booking-bot
+    command: python -m scripts.seed
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    profiles: ["seed"]
+
+  bot:
+    image: salon-booking-bot
+    command: python -m app.main
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    image: salon-booking-bot
+    command: taskiq worker app.tasks.broker:broker app.tasks.notifications
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    image: salon-booking-bot
+    command: taskiq scheduler app.tasks.broker:scheduler app.tasks.notifications
+    environment: *app-env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
