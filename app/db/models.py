@@ -11,9 +11,20 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime, time
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, String, func
+from sqlalchemy import (
+    BigInteger,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Time,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -98,30 +109,26 @@ class Master(Base):
 
     user: Mapped[User | None] = relationship(back_populates="master_profile")
     bookings: Mapped[list[Booking]] = relationship(back_populates="master")
-
-
-class Booking(Base):
-    """Запись клиента."""
-
-    __tablename__ = "bookings"
-    __table_args__ = (
-        Index("ix_bookings_master_starts_at", "master_id", "starts_at"),
-        Index("ix_bookings_user_id", "user_id"),
+    schedules: Mapped[list[MasterSchedule]] = relationship(
+        back_populates="master", cascade="all, delete-orphan"
     )
+    time_off: Mapped[list[MasterTimeOff]] = relationship(
+        back_populates="master", cascade="all, delete-orphan"
+    )
+
+
+class MasterSchedule(Base):
+    """Рабочие часы мастера в конкретный день недели.
+
+    Наличие строки = мастер работает в этот день (weekday: 0=Пн … 6=Вс),
+    отсутствие = выходной. При назначении роли MASTER создаётся график
+    по умолчанию (часы салона, все дни).
+    """
+
+    __tablename__ = "master_schedules"
+    __table_args__ = (UniqueConstraint("master_id", "weekday", name="uq_schedule_master_weekday"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"))
-    master_id: Mapped[int] = mapped_column(ForeignKey("masters.id"))
-    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    seats_count: Mapped[int] = mapped_column(default=1)
-    status: Mapped[BookingStatus] = mapped_column(
-        Enum(BookingStatus, native_enum=False, length=16),
-        default=BookingStatus.CONFIRMED,
-    )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user: Mapped[User] = relationship(back_populates="bookings")
-    service: Mapped[Service] = relationship(back_populates="bookings")
-    master: Mapped[Master] = relationship(back_populates="bookings")
+    master_id: Mapped[int] = mapped_column(ForeignKey("masters.id", ondelete="CASCADE"))
+    weekday: Mapped[int]  # 0 = понедельник … 6 = воскресенье
+    start_time: Mapped[time] = mapped_colu

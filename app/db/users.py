@@ -54,8 +54,9 @@ class UserRepository:
     async def set_role(self, user_id: int, role: UserRole) -> User | None:
         """Назначает роль и синхронизирует профиль мастера.
 
-        MASTER: создаёт профиль мастера (или реактивирует существующий).
-        Понижение с MASTER: деактивирует профиль (история записей остаётся).
+        MASTER: создаёт профиль мастера с графиком по умолчанию
+        (или реактивирует существующий). Понижение с MASTER: деактивирует
+        профиль (история записей остаётся).
         """
         user = await self.get_by_id(user_id)
         if user is None:
@@ -68,7 +69,13 @@ class UserRepository:
         if role == UserRole.MASTER:
             if master is None:
                 display_name = user.name or user.username or f"Мастер #{user.id}"
-                self._session.add(Master(user_id=user.id, name=display_name))
+                master = Master(user_id=user.id, name=display_name)
+                self._session.add(master)
+                await self._session.flush()
+                # График по умолчанию (часы салона), чтобы мастер сразу был доступен.
+                from app.db.schedule import ScheduleRepository
+
+                await ScheduleRepository(self._session).create_default_week(master.id)
             else:
                 master.is_active = True
         elif old_role == UserRole.MASTER and master is not None:

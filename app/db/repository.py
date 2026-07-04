@@ -105,14 +105,22 @@ class BookingRepository:
     ) -> list[datetime]:
         """Свободные слоты мастера на день с учётом длительности услуги.
 
-        Слот считается занятым, если интервал [slot, slot + duration)
-        пересекается с интервалом любой активной записи.
+        Часы берутся из графика мастера (день недели + отпуска): выходной
+        или отпуск — слотов нет. Слот считается занятым, если интервал
+        [slot, slot + duration) пересекается с любой активной записью.
         """
+        from app.db.schedule import ScheduleRepository  # локально: избегаем цикла импортов
+
         settings = get_settings()
         tz = settings.tz
 
-        cursor = datetime.combine(day, settings.work_start, tzinfo=tz)
-        end_of_day = datetime.combine(day, settings.work_end, tzinfo=tz)
+        hours = await ScheduleRepository(self._session).get_working_hours(master_id, day)
+        if hours is None:
+            return []
+        work_start, work_end = hours
+
+        cursor = datetime.combine(day, work_start, tzinfo=tz)
+        end_of_day = datetime.combine(day, work_end, tzinfo=tz)
         duration = timedelta(minutes=duration_minutes)
         now = datetime.now(tz)
 
