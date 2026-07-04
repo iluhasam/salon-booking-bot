@@ -131,4 +131,53 @@ class MasterSchedule(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     master_id: Mapped[int] = mapped_column(ForeignKey("masters.id", ondelete="CASCADE"))
     weekday: Mapped[int]  # 0 = понедельник … 6 = воскресенье
-    start_time: Mapped[time] = mapped_colu
+    start_time: Mapped[time] = mapped_column(Time)
+    end_time: Mapped[time] = mapped_column(Time)
+
+    master: Mapped[Master] = relationship(back_populates="schedules")
+
+
+class MasterTimeOff(Base):
+    """Отпуск/недоступность мастера: интервал дат включительно.
+
+    В эти дни клиенты не видят слотов мастера (пункт «мастер заболел /
+    в отпуске» — без изменения графика).
+    """
+
+    __tablename__ = "master_time_off"
+    __table_args__ = (Index("ix_time_off_master_dates", "master_id", "date_from", "date_to"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    master_id: Mapped[int] = mapped_column(ForeignKey("masters.id", ondelete="CASCADE"))
+    date_from: Mapped[date] = mapped_column(Date)
+    date_to: Mapped[date] = mapped_column(Date)
+    reason: Mapped[str | None] = mapped_column(String(128))
+
+    master: Mapped[Master] = relationship(back_populates="time_off")
+
+
+class Booking(Base):
+    """Запись клиента."""
+
+    __tablename__ = "bookings"
+    __table_args__ = (
+        Index("ix_bookings_master_starts_at", "master_id", "starts_at"),
+        Index("ix_bookings_user_id", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"))
+    master_id: Mapped[int] = mapped_column(ForeignKey("masters.id"))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    seats_count: Mapped[int] = mapped_column(default=1)
+    status: Mapped[BookingStatus] = mapped_column(
+        Enum(BookingStatus, native_enum=False, length=16),
+        default=BookingStatus.CONFIRMED,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="bookings")
+    service: Mapped[Service] = relationship(back_populates="bookings")
+    master: Mapped[Master] = relationship(back_populates="bookings")

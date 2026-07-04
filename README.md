@@ -145,4 +145,10 @@ uv run alembic upgrade head                             # применить
 3. `docker compose up -d --build && docker compose run --rm seed`.
 4. Данные PostgreSQL и Redis живут в именованных volume (`pg_data`,
    `redis_data`); все сервисы перезапускаются автоматически
-   (`re
+   (`restart: unless-stopped`), миграции прогоняются при каждом старте.
+
+Резервное копирование БД:
+
+```bash
+docker compose exec postgres pg_dump -U bot booking > backup_$(date +%F).sql
+```
