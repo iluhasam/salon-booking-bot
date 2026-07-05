@@ -40,20 +40,31 @@ app/
   main.py                # точка входа бота (long polling)
   core/logging.py        # консоль + ротируемые логи (bot.log, errors.log)
   db/
-    models.py            # User, Service, Master, Booking (SQLAlchemy 2.0)
+    models.py            # User (роль), Service, Master, графики, Booking
     engine.py            # асинхронный движок + фабрика сессий
-    repository.py        # бизнес-логика, защита слотов от гонок
+    repository.py        # бронирования, слоты, защита от гонок
+    users.py             # пользователи, роли, профили мастеров
+    schedule.py          # графики по дням недели и отпуска
   dialogs/booking.py     # окна aiogram-dialog (сценарий записи)
+  filters/role.py        # доступ по роли из БД
   handlers/
     my_bookings.py       # /my: список и отмена записей
+    master.py            # /schedule: расписание мастера
+    admin.py             # /admin: роли, графики, отпуска, записи
     errors.py            # глобальная обработка ошибок
-  middlewares/db.py      # сессия БД на каждый update
+  middlewares/
+    db.py                # сессия БД на каждый update
+    user.py              # авторизация: User с ролью в data['user']
   schemas/contact.py     # Pydantic-валидация имени/телефона
+  services/notify.py     # уведомления персоналу (админы + мастер)
   tasks/
     broker.py            # Taskiq: брокер, планировщик, ресурсы воркера
     notifications.py     # напоминания (отложенные задачи, ретраи)
-migrations/              # Alembic (async env.py + версии)
-scripts/seed.py          # идемпотентное наполнение справочников
+  utils/parse.py         # парсинг ввода админа (часы, интервалы дат)
+migrations/              # Alembic (async env.py + версии 0001–0003)
+scripts/
+  seed.py                # идемпотентное наполнение справочников
+  grant_admin.py         # назначение первого администратора
 Dockerfile, docker-compose.yml, pyproject.toml, uv.lock
 ```
 
@@ -141,8 +152,10 @@ uv run alembic upgrade head                             # применить
 
 1. Установить Docker + Compose v2.
 2. Склонировать проект, создать `.env` из `.env.example` (сильный
-   `POSTGRES_PASSWORD`, реальные `BOT_TOKEN` и `ADMIN_CHAT_ID`).
-3. `docker compose up -d --build && docker compose run --rm seed`.
+   `POSTGRES_PASSWORD`, реальный `BOT_TOKEN`).
+3. `docker compose up -d --build && docker compose run --rm seed`, затем
+   назначить первого администратора:
+   `docker compose run --rm bot python -m scripts.grant_admin <telegram_id>`.
 4. Данные PostgreSQL и Redis живут в именованных volume (`pg_data`,
    `redis_data`); все сервисы перезапускаются автоматически
    (`restart: unless-stopped`), миграции прогоняются при каждом старте.
