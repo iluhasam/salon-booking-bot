@@ -37,8 +37,9 @@ async def notify_staff(bot: Bot, session: AsyncSession, master_id: int, text: st
             logger.exception("Failed to notify staff chat_id=%s", chat_id)
 
 
-def booking_summary(booking: Booking, client_name: str, phone: str, master_name: str,
-                    service_title: str) -> str:
+def booking_summary(
+    booking: Booking, client_name: str, phone: str, master_name: str, service_title: str
+) -> str:
     """Текст уведомления о записи (имя, услуга, дата, время, контакты)."""
     starts_local = booking.starts_at.astimezone(get_settings().tz)
     return (

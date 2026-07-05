@@ -87,8 +87,7 @@ async def cb_users(callback: CallbackQuery, session: AsyncSession) -> None:
     """Последние зарегистрировавшиеся пользователи."""
     users = await UserRepository(session).list_recent(limit=20)
     keyboard = [
-        [InlineKeyboardButton(text=_user_label(u), callback_data=f"adm:user:{u.id}")]
-        for u in users
+        [InlineKeyboardButton(text=_user_label(u), callback_data=f"adm:user:{u.id}")] for u in users
     ]
     keyboard.append([InlineKeyboardButton(text="⬅️ Меню", callback_data="adm:menu")])
     if isinstance(callback.message, Message):
@@ -167,9 +166,7 @@ async def cb_set_role(callback: CallbackQuery, session: AsyncSession, user: User
 # ---------------------------------------------------------------- masters
 
 
-async def _master_card(
-    session: AsyncSession, master: Master
-) -> tuple[str, InlineKeyboardMarkup]:
+async def _master_card(session: AsyncSession, master: Master) -> tuple[str, InlineKeyboardMarkup]:
     """Текст и клавиатура карточки мастера (график + отпуска)."""
     schedule_repo = ScheduleRepository(session)
     week = await schedule_repo.get_week(master.id)
@@ -220,9 +217,7 @@ async def _master_card(
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def _show_master_card(
-    callback: CallbackQuery, session: AsyncSession, master_id: int
-) -> None:
+async def _show_master_card(callback: CallbackQuery, session: AsyncSession, master_id: int) -> None:
     master = await BookingRepository(session).get_master(master_id)
     if master is None:
         await callback.answer("Мастер не найден.", show_alert=True)
@@ -314,9 +309,7 @@ async def msg_day_hours(message: Message, session: AsyncSession, state: FSMConte
         else:
             hours = parse_hours(text)
             if hours is None:
-                await message.answer(
-                    "Не понял. Формат: <code>10:00-19:00</code> или «выходной»."
-                )
+                await message.answer("Не понял. Формат: <code>10:00-19:00</code> или «выходной».")
                 return
             await repo.set_day(master_id, weekday, *hours)
             result = f"{WEEKDAYS_RU[weekday]}: {hours[0]:%H:%M}–{hours[1]:%H:%M}."

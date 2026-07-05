@@ -41,9 +41,7 @@ class ScheduleRepository:
         )
         if row is None:
             self._session.add(
-                MasterSchedule(
-                    master_id=master_id, weekday=weekday, start_time=start, end_time=end
-                )
+                MasterSchedule(master_id=master_id, weekday=weekday, start_time=start, end_time=end)
             )
         else:
             row.start_time, row.end_time = start, end

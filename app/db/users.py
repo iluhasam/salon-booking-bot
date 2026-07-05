@@ -109,7 +109,7 @@ class UserRepository:
     async def get_master_telegram_id(self, master_id: int) -> int | None:
         """Telegram ID пользователя, привязанного к мастеру (если есть)."""
         return await self._session.scalar(
-            select(User.telegram_id).join(Master, Master.user_id == User.id).where(
-                Master.id == master_id
-            )
+            select(User.telegram_id)
+            .join(Master, Master.user_id == User.id)
+            .where(Master.id == master_id)
         )
