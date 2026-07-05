@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.core.logging import setup_logging
 from app.db.engine import create_engine, create_session_factory
 from app.db.models import Master, Service
+from app.db.schedule import ScheduleRepository
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +46,15 @@ async def seed() -> None:
                 if data["title"] not in existing_services:
                     session.add(Service(**data))
                     added += 1
+
+            schedule_repo = ScheduleRepository(session)
             for data in MASTERS:
                 if data["name"] not in existing_masters:
-                    session.add(Master(**data))
+                    master = Master(**data)
+                    session.add(master)
+                    await session.flush()
+                    # График по умолчанию (часы салона, все дни).
+                    await schedule_repo.create_default_week(master.id)
                     added += 1
 
             await session.commit()

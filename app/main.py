@@ -22,9 +22,12 @@ from app.core.logging import setup_logging
 from app.db.engine import create_engine, create_session_factory
 from app.dialogs.booking import booking_dialog
 from app.dialogs.booking import router as booking_router
+from app.handlers.admin import router as admin_router
 from app.handlers.errors import router as errors_router
+from app.handlers.master import router as master_router
 from app.handlers.my_bookings import router as my_bookings_router
 from app.middlewares.db import DbSessionMiddleware
+from app.middlewares.user import CurrentUserMiddleware
 from app.tasks.broker import broker
 
 logger = logging.getLogger(__name__)
@@ -32,6 +35,7 @@ logger = logging.getLogger(__name__)
 BOT_COMMANDS = [
     BotCommand(command="start", description="Записаться"),
     BotCommand(command="my", description="Мои записи"),
+    BotCommand(command="schedule", description="Расписание (для мастеров)"),
 ]
 
 
@@ -57,8 +61,12 @@ async def main() -> None:
 
     # Сессия БД на каждый update — без глобальных переменных.
     dp.update.outer_middleware(DbSessionMiddleware(session_factory))
+    # Авторизация: User (с ролью из БД) в data['user'] для фильтров/хендлеров.
+    dp.update.outer_middleware(CurrentUserMiddleware())
 
     dp.include_router(errors_router)
+    dp.include_router(admin_router)
+    dp.include_router(master_router)
     dp.include_router(booking_router)
     dp.include_router(my_bookings_router)
     dp.include_router(booking_dialog)

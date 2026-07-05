@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     """Настройки, загружаемые из окружения / .env."""
 
     bot_token: str
-    admin_chat_id: int
 
     database_url: str = "postgresql+asyncpg://bot:bot@localhost:5432/booking"
     redis_url: str = "redis://localhost:6379/0"

@@ -1,6 +1,5 @@
 x-app-env: &app-env
   BOT_TOKEN: ${BOT_TOKEN}
-  ADMIN_CHAT_ID: ${ADMIN_CHAT_ID}
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bot}:${POSTGRES_PASSWORD:-bot}@postgres:5432/${POSTGRES_DB:-booking}
   REDIS_URL: redis://redis:6379/0
   TIMEZONE: ${TIMEZONE:-Europe/Moscow}

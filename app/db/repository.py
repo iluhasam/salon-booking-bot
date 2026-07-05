@@ -47,9 +47,33 @@ class BookingRepository:
         return list(result)
 
     async def get_masters(self) -> list[Master]:
-        """Все мастера, отсортированные по рейтингу."""
-        result = await self._session.scalars(select(Master).order_by(Master.rating.desc()))
+        """Активные мастера, отсортированные по рейтингу (для клиентов)."""
+        result = await self._session.scalars(
+            select(Master).where(Master.is_active.is_(True)).order_by(Master.rating.desc())
+        )
         return list(result)
+
+    async def get_upcoming_bookings(
+        self, master_id: int | None = None, limit: int = 30
+    ) -> list[Booking]:
+        """Будущие активные записи: все (админ) или одного мастера (/schedule)."""
+        stmt = (
+            select(Booking)
+            .where(
+                Booking.status.in_(ACTIVE_STATUSES),
+                Booking.starts_at >= datetime.now(UTC),
+            )
+            .options(
+                selectinload(Booking.service),
+                selectinload(Booking.master),
+                selectinload(Booking.user),
+            )
+            .order_by(Booking.starts_at)
+            .limit(limit)
+        )
+        if master_id is not None:
+            stmt = stmt.where(Booking.master_id == master_id)
+        return list(await self._session.scalars(stmt))
 
     async def get_service(self, service_id: int) -> Service | None:
         return await self._session.get(Service, service_id)
@@ -81,14 +105,22 @@ class BookingRepository:
     ) -> list[datetime]:
         """Свободные слоты мастера на день с учётом длительности услуги.
 
-        Слот считается занятым, если интервал [slot, slot + duration)
-        пересекается с интервалом любой активной записи.
+        Часы берутся из графика мастера (день недели + отпуска): выходной
+        или отпуск — слотов нет. Слот считается занятым, если интервал
+        [slot, slot + duration) пересекается с любой активной записью.
         """
+        from app.db.schedule import ScheduleRepository  # локально: избегаем цикла импортов
+
         settings = get_settings()
         tz = settings.tz
 
-        cursor = datetime.combine(day, settings.work_start, tzinfo=tz)
-        end_of_day = datetime.combine(day, settings.work_end, tzinfo=tz)
+        hours = await ScheduleRepository(self._session).get_working_hours(master_id, day)
+        if hours is None:
+            return []
+        work_start, work_end = hours
+
+        cursor = datetime.combine(day, work_start, tzinfo=tz)
+        end_of_day = datetime.combine(day, work_end, tzinfo=tz)
         duration = timedelta(minutes=duration_minutes)
         now = datetime.now(tz)
 
@@ -191,6 +223,11 @@ class BookingRepository:
                 Booking.id == booking_id,
                 User.telegram_id == telegram_id,
                 Booking.status.in_(ACTIVE_STATUSES),
+            )
+            .options(
+                selectinload(Booking.service),
+                selectinload(Booking.master),
+                selectinload(Booking.user),
             )
             .with_for_update(of=Booking)
         )
