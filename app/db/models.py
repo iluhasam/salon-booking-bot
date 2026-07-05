@@ -32,6 +32,20 @@ class Base(DeclarativeBase):
     """Базовый декларативный класс."""
 
 
+def _str_enum(enum_cls: type[enum.StrEnum]) -> Enum:
+    """VARCHAR-колонка для StrEnum, хранящая значения ('client'), а не имена ('CLIENT').
+
+    Значения совпадают с server_default в миграциях и с WHERE-условием
+    EXCLUDE-констрейнта uq_bookings_no_overlap — имена бы его молча обходили.
+    """
+    return Enum(
+        enum_cls,
+        native_enum=False,
+        length=16,
+        values_callable=lambda e: [member.value for member in e],
+    )
+
+
 class BookingStatus(enum.StrEnum):
     """Статусы бронирования."""
 
@@ -65,7 +79,7 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(128))
     phone: Mapped[str | None] = mapped_column(String(16))
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, native_enum=False, length=16),
+        _str_enum(UserRole),
         default=UserRole.CLIENT,
         server_default=UserRole.CLIENT.value,
     )
@@ -173,7 +187,7 @@ class Booking(Base):
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     seats_count: Mapped[int] = mapped_column(default=1)
     status: Mapped[BookingStatus] = mapped_column(
-        Enum(BookingStatus, native_enum=False, length=16),
+        _str_enum(BookingStatus),
         default=BookingStatus.CONFIRMED,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
